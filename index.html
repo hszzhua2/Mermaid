@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid 转换器 - Liquid Glass Edition</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Mermaid JS: Upgraded to v11.3.0 to fix layout calculation errors -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.3.0/dist/mermaid.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        blob: "blob 7s infinite",
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        blob: {
+                            "0%": { transform: "translate(0px, 0px) scale(1)" },
+                            "33%": { transform: "translate(30px, -50px) scale(1.1)" },
+                            "66%": { transform: "translate(-20px, 20px) scale(0.9)" },
+                            "100%": { transform: "translate(0px, 0px) scale(1)" }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #1e293b;
+        }
+
+        /* 核心玻璃效果 */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        .glass-panel-darker {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        /* 液态按钮风格 */
+        .btn-liquid {
+            background: rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(4px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-liquid::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            transition: 0.5s;
+        }
+        
+        .btn-liquid:hover::before {
+            left: 100%;
+        }
+
+        .btn-liquid:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            border-color: rgba(255,255,255,0.8);
+        }
+
+        .btn-liquid:active {
+            transform: translateY(0);
+        }
+
+        /* 主按钮特殊高亮 */
+        .btn-primary-glass {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.6) 0%, rgba(168, 85, 247, 0.6) 100%);
+            border: 1px solid rgba(255,255,255,0.4);
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .btn-primary-glass:hover {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.8) 0%, rgba(168, 85, 247, 0.8) 100%);
+            border-color: rgba(255,255,255,0.6);
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05); 
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3); 
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5); 
+        }
+
+        /* 编辑器字体 */
+        .code-font {
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+        }
+
+        /* 预览区背景网格 - 更加柔和 */
+        .preview-bg {
+            background-image: 
+                radial-gradient(rgba(0,0,0,0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* 选中状态 */
+        .selection-glass {
+            background: rgba(255, 255, 255, 0.2);
+            color: #1e293b;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .selection-glass option {
+            background: #fff; /* 下拉选项恢复纯色以保证可读性 */
+            color: #333;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden relative selection:bg-pink-300 selection:text-pink-900">
+
+    <!-- 动态背景层 (The Liquid Background) -->
+    <div class="fixed inset-0 -z-10 bg-[#e0e7ff]">
+        <!-- 渐变底色 -->
+        <div class="absolute inset-0 bg-gradient-to-br from-indigo-200 via-purple-200 to-pink-200 opacity-80"></div>
+        
+        <!-- 浮动的光斑 (Blobs) -->
+        <div class="absolute top-0 left-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-60 animate-blob"></div>
+        <div class="absolute top-0 right-1/4 w-96 h-96 bg-yellow-300 rounded-full mix-blend-multiply filter blur-3xl opacity-60 animate-blob animation-delay-2000"></div>
+        <div class="absolute -bottom-32 left-1/3 w-96 h-96 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl opacity-60 animate-blob animation-delay-4000"></div>
+    </div>
+
+    <!-- 顶部导航栏 -->
+    <header class="glass-panel mx-4 mt-4 rounded-2xl px-6 py-3 flex items-center justify-between z-20 sticky top-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center shadow-lg text-white">
+                <i class="fa-solid fa-diagram-project text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-purple-700">Mermaid Glass</h1>
+                <p class="text-[10px] text-gray-500 font-medium uppercase tracking-widest opacity-70">Visual Editor</p>
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <!-- 主题选择 -->
+            <div class="flex items-center gap-2 mr-2 bg-white/20 px-3 py-1.5 rounded-full border border-white/30 backdrop-blur-sm">
+                <i class="fa-solid fa-palette text-gray-600 text-xs"></i>
+                <select id="themeSelector" class="bg-transparent border-none text-sm text-gray-700 focus:outline-none cursor-pointer font-medium w-24">
+                    <option value="default">默认</option>
+                    <option value="neutral">简约</option>
+                    <option value="dark">暗夜</option>
+                    <option value="forest">森林</option>
+                    <option value="base">基础</option>
+                </select>
+            </div>
+
+            <!-- 操作按钮 -->
+            <button onclick="copyCode()" class="btn-liquid px-4 py-2 rounded-xl text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <i class="fa-regular fa-copy"></i>
+                <span class="hidden sm:inline">复制</span>
+            </button>
+            
+            <div class="h-6 w-px bg-gray-400/30 mx-1"></div>
+
+            <button onclick="downloadSVG()" class="btn-liquid px-4 py-2 rounded-xl text-sm font-semibold text-indigo-800 flex items-center gap-2">
+                <i class="fa-solid fa-download"></i>
+                <span>SVG</span>
+            </button>
+            <button onclick="downloadPNG()" class="btn-liquid btn-primary-glass px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-500/20">
+                <i class="fa-solid fa-image"></i>
+                <span>PNG 高清</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="flex-1 flex flex-col md:flex-row gap-4 p-4 overflow-hidden relative z-10">
+        
+        <!-- 左侧：代码编辑器 -->
+        <div class="w-full md:w-1/3 flex flex-col glass-panel rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
+            <!-- 编辑器头部 -->
+            <div class="bg-white/10 px-5 py-3 border-b border-white/20 flex justify-between items-center backdrop-blur-md">
+                <span class="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]"></span>
+                    Code Input
+                </span>
+                <span id="statusIndicator" class="text-[10px] font-bold px-2 py-1 rounded-md bg-green-100/50 text-green-700 border border-green-200/50 backdrop-blur-sm transition-all duration-300">
+                    <i class="fa-solid fa-circle-check mr-1"></i> READY
+                </span>
+            </div>
+            
+            <!-- 编辑区域 -->
+            <div class="flex-1 relative bg-white/30 backdrop-blur-sm group">
+                <textarea id="codeInput" 
+                    class="w-full h-full p-5 resize-none focus:outline-none bg-transparent code-font text-sm leading-relaxed text-gray-800 placeholder-gray-400/70"
+                    placeholder="在此输入 Mermaid 代码..."
+                    spellcheck="false"></textarea>
+                <!-- 聚焦时的光晕装饰 -->
+                <div class="absolute inset-0 pointer-events-none border-2 border-transparent group-focus-within:border-blue-400/30 rounded-none transition-colors duration-300"></div>
+            </div>
+
+            <!-- 底部模板栏 -->
+            <div class="bg-white/20 p-3 border-t border-white/30 backdrop-blur-md">
+                <div class="text-[10px] text-gray-500 font-semibold mb-2 px-1">快速模板</div>
+                <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                    <button onclick="loadTemplate('flow')" class="text-xs btn-liquid bg-white/40 px-3 py-1.5 rounded-lg text-gray-700 whitespace-nowrap hover:text-blue-600 border border-white/40">
+                        <i class="fa-solid fa-shuffle mr-1 opacity-70"></i> 流程图
+                    </button>
+                    <button onclick="loadTemplate('sequence')" class="text-xs btn-liquid bg-white/40 px-3 py-1.5 rounded-lg text-gray-700 whitespace-nowrap hover:text-blue-600 border border-white/40">
+                        <i class="fa-solid fa-arrow-down-long mr-1 opacity-70"></i> 时序图
+                    </button>
+                    <button onclick="loadTemplate('class')" class="text-xs btn-liquid bg-white/40 px-3 py-1.5 rounded-lg text-gray-700 whitespace-nowrap hover:text-blue-600 border border-white/40">
+                        <i class="fa-solid fa-shapes mr-1 opacity-70"></i> 类图
+                    </button>
+                    <button onclick="loadTemplate('mindmap')" class="text-xs btn-liquid bg-white/40 px-3 py-1.5 rounded-lg text-gray-700 whitespace-nowrap hover:text-blue-600 border border-white/40">
+                        <i class="fa-solid fa-brain mr-1 opacity-70"></i> 思维导图
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：预览区域 -->
+        <div class="w-full md:w-2/3 flex flex-col glass-panel rounded-2xl overflow-hidden relative">
+            <div class="bg-white/10 px-5 py-3 border-b border-white/20 flex justify-between items-center backdrop-blur-md z-10">
+                <span class="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)] animate-pulse-slow"></span>
+                    Live Preview
+                </span>
+                <div class="flex gap-1">
+                    <div class="w-2.5 h-2.5 rounded-full bg-red-400/80 border border-red-500/30"></div>
+                    <div class="w-2.5 h-2.5 rounded-full bg-yellow-400/80 border border-yellow-500/30"></div>
+                    <div class="w-2.5 h-2.5 rounded-full bg-green-400/80 border border-green-500/30"></div>
+                </div>
+            </div>
+            
+            <!-- 预览容器 -->
+            <div id="previewContainer" class="flex-1 overflow-auto p-8 flex items-center justify-center preview-bg relative bg-white/40">
+                <!-- 渲染内容 -->
+                <div id="mermaidOutput" class="transition-all duration-500 ease-in-out transform"></div>
+                
+                <!-- 错误提示层 Glass Style -->
+                <div id="errorLayer" class="hidden absolute top-6 left-6 right-6 z-20 animate-bounce-short">
+                    <div class="glass-panel border-l-4 border-l-red-500 p-4 rounded-xl flex items-start shadow-xl bg-white/80 backdrop-blur-xl">
+                        <div class="p-2 bg-red-100 rounded-full mr-3 text-red-500 shrink-0">
+                            <i class="fa-solid fa-bug"></i>
+                        </div>
+                        <div class="flex-1">
+                            <h3 class="text-sm font-bold text-red-800">Oops! 语法或布局错误</h3>
+                            <p id="errorMessage" class="text-xs text-red-600 mt-1 font-mono break-all opacity-90"></p>
+                        </div>
+                        <button onclick="document.getElementById('errorLayer').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 隐藏的Canvas用于导出图片 -->
+    <canvas id="exportCanvas" style="display:none;"></canvas>
+
+    <script>
+        // 默认模板
+        const templates = {
+            flow: `graph TD
+    A[Start] --> B{Is it Liquid?}
+    B -- Yes --> C[Looks Cool!]
+    B -- No --> D[Add Blur]
+    D --> C
+    C --> E[Happy User]`,
+            sequence: `sequenceDiagram
+    participant User
+    participant System
+    participant Glass
+    
+    User->>System: Input Code
+    System->>Glass: Apply Blur Effect
+    Glass-->>System: Render UI
+    System-->>User: Visual Delight`,
+            class: `classDiagram
+    class Glass {
+        +float blur
+        +float opacity
+        +shine()
+    }
+    class Liquid {
+        +flow()
+        +distort()
+    }
+    Glass <|-- Liquid`,
+            gantt: `gantt
+    title Development Plan
+    dateFormat  YYYY-MM-DD
+    section UI
+    Glass Effect :a1, 2023-10-01, 3d
+    Liquid Anim  :after a1, 2d
+    section Logic
+    Mermaid Core :2023-10-05, 5d`,
+            mindmap: `mindmap
+  root((Liquid Glass))
+    Aesthetics
+      Blur
+      Transparency
+      Depth
+    Tech
+      CSS Backdrop
+      Tailwind
+      Mermaid`
+        };
+
+        let renderTimeout;
+        const codeInput = document.getElementById('codeInput');
+        const mermaidOutput = document.getElementById('mermaidOutput');
+        const errorLayer = document.getElementById('errorLayer');
+        const errorMessage = document.getElementById('errorMessage');
+        const themeSelector = document.getElementById('themeSelector');
+        const statusIndicator = document.getElementById('statusIndicator');
+
+        // 初始化 Mermaid
+        mermaid.initialize({ 
+            startOnLoad: false,
+            securityLevel: 'loose',
+            theme: 'default',
+            fontFamily: 'Inter, sans-serif'
+        });
+
+        window.addEventListener('load', () => {
+            codeInput.value = templates.flow;
+            renderDiagram();
+        });
+
+        codeInput.addEventListener('input', () => {
+            statusIndicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> RENDERING';
+            statusIndicator.className = 'text-[10px] font-bold px-2 py-1 rounded-md bg-blue-100/50 text-blue-700 border border-blue-200/50 backdrop-blur-sm transition-all duration-300';
+            
+            clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(renderDiagram, 500);
+        });
+
+        themeSelector.addEventListener('change', () => {
+            const theme = themeSelector.value;
+            
+            // 重新初始化 Mermaid 主题
+            mermaid.initialize({ 
+                theme: theme,
+                fontFamily: 'Inter, sans-serif'
+            });
+
+            // 动态调整预览区玻璃背景色，以适配暗色主题
+            const previewContainer = document.getElementById('previewContainer');
+            const isDark = ['dark', 'forest'].includes(theme);
+            
+            if (isDark) {
+                // 切换为深色玻璃效果
+                previewContainer.classList.remove('bg-white/40');
+                previewContainer.classList.add('bg-slate-900/80');
+                previewContainer.classList.add('shadow-inner'); // 增加内阴影增加沉浸感
+            } else {
+                // 恢复为浅色玻璃效果
+                previewContainer.classList.remove('bg-slate-900/80', 'shadow-inner');
+                previewContainer.classList.add('bg-white/40');
+            }
+
+            renderDiagram();
+        });
+
+        function loadTemplate(type) {
+            // 添加简单的淡入淡出动画效果
+            codeInput.style.opacity = '0.5';
+            setTimeout(() => {
+                codeInput.value = templates[type];
+                codeInput.style.opacity = '1';
+                renderDiagram();
+            }, 150);
+        }
+
+        async function renderDiagram() {
+            const code = codeInput.value.trim();
+            // 防止空代码报错
+            if (!code) return;
+
+            errorLayer.classList.add('hidden');
+            
+            try {
+                const id = 'mermaid-' + Math.round(Math.random() * 10000);
+                // 先解析，确保语法通过
+                await mermaid.parse(code);
+                // 再渲染
+                const { svg } = await mermaid.render(id, code);
+                mermaidOutput.innerHTML = svg;
+                
+                const svgElement = mermaidOutput.querySelector('svg');
+                if (svgElement) {
+                    svgElement.style.maxWidth = '100%';
+                    svgElement.style.height = 'auto';
+                    svgElement.style.backgroundColor = 'transparent'; 
+                    // 增加一点投影增加立体感
+                    svgElement.style.filter = 'drop-shadow(0 4px 6px rgba(0,0,0,0.05))';
+                }
+
+                statusIndicator.innerHTML = '<i class="fa-solid fa-check-circle mr-1"></i> READY';
+                statusIndicator.className = 'text-[10px] font-bold px-2 py-1 rounded-md bg-green-100/50 text-green-700 border border-green-200/50 backdrop-blur-sm transition-all duration-300';
+            } catch (error) {
+                console.error("Mermaid Render Error:", error);
+                errorLayer.classList.remove('hidden');
+                
+                // 针对布局错误的特殊处理提示
+                if (error.message && error.message.includes('suitable point')) {
+                    errorMessage.textContent = "布局计算错误：请尝试简化连线或调整节点位置 (Mermaid Engine Error)";
+                } else {
+                    errorMessage.textContent = error.message || "语法解析失败，请检查代码格式。";
+                }
+                
+                statusIndicator.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> ERROR';
+                statusIndicator.className = 'text-[10px] font-bold px-2 py-1 rounded-md bg-red-100/50 text-red-700 border border-red-200/50 backdrop-blur-sm transition-all duration-300';
+            }
+        }
+
+        function copyCode() {
+            navigator.clipboard.writeText(codeInput.value).then(() => {
+                const btnSpan = document.querySelector('button[onclick="copyCode()"] span');
+                if(btnSpan) {
+                    const originalText = btnSpan.textContent;
+                    btnSpan.textContent = '已复制!';
+                    setTimeout(() => {
+                        btnSpan.textContent = originalText;
+                    }, 2000);
+                }
+            });
+        }
+
+        function downloadSVG() {
+            const svgElement = mermaidOutput.querySelector('svg');
+            if (!svgElement) return;
+
+            const svgData = new XMLSerializer().serializeToString(svgElement);
+            const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `mermaid-glass-${Date.now()}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function downloadPNG() {
+            const svgElement = mermaidOutput.querySelector('svg');
+            if (!svgElement) return;
+
+            // 1. 获取 SVG 字符串
+            const serializer = new XMLSerializer();
+            let svgString = serializer.serializeToString(svgElement);
+            
+            // 简单的清理，防止部分命名空间问题
+            svgString = svgString.replace(/NS\d+:href/g, 'xlink:href');
+
+            // 2. 转换为 Base64 Data URI
+            // 这是解决 "Tainted canvas" 最有效的方法之一，比 Blob URL 更兼容
+            const svgBase64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+
+            const canvas = document.getElementById('exportCanvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            // 设置跨域属性
+            img.crossOrigin = 'Anonymous';
+
+            img.onload = function() {
+                const scale = 3; 
+                const width = (svgElement.viewBox.baseVal.width || svgElement.clientWidth) * scale;
+                const height = (svgElement.viewBox.baseVal.height || svgElement.clientHeight) * scale;
+
+                canvas.width = width;
+                canvas.height = height;
+
+                // 导出时根据当前主题智能决定背景色
+                const isDark = ['dark', 'forest'].includes(themeSelector.value);
+                ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.drawImage(img, 0, 0, width, height);
+
+                try {
+                    // 尝试导出 PNG
+                    const pngUrl = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = pngUrl;
+                    link.download = `mermaid-glass-${Date.now()}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (e) {
+                    // 如果依然遇到安全错误（通常是因为 SVG 包含了复杂的 HTML 标签/foreignObject）
+                    console.error("PNG Export Failed due to browser security:", e);
+                    alert("由于浏览器安全限制（通常是因为图表中包含复杂的 HTML 标签），无法生成 PNG 图片。系统已自动为您下载 SVG 矢量图作为替代。");
+                    downloadSVG(); // 降级方案
+                }
+            };
+            
+            img.onerror = function() {
+                alert("图片渲染失败，请检查图表代码。");
+            };
+            
+            img.src = svgBase64;
+        }
+    </script>
+</body>
+</html>
